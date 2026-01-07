@@ -1,0 +1,5 @@
+
+{
+  "name": "SQL Lens: Logical Execution Visualizer",
+  "description": "A powerful educational tool that visualizes the step-by-step logical execution of SQL queries, helping beginners understand how data flows through FROM, WHERE, GROUP BY, and SELECT clauses."
+}
