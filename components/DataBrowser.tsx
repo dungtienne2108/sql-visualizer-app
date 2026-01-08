@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Table } from '../types';
 import Pagination from './Pagination';
+import ERDDiagram from './ERDDiagram';
 
 interface DataBrowserProps {
   tables: Record<string, Table>;
@@ -10,6 +11,8 @@ interface DataBrowserProps {
   onPageChange: (page: number) => void;
 }
 
+type ViewMode = 'table' | 'erd';
+
 const DataBrowser: React.FC<DataBrowserProps> = ({
   tables,
   selectedTable,
@@ -17,6 +20,7 @@ const DataBrowser: React.FC<DataBrowserProps> = ({
   onTableSelect,
   onPageChange,
 }) => {
+  const [viewMode, setViewMode] = useState<ViewMode>('table');
   const ROWS_PER_PAGE = 10;
   const table = tables[selectedTable];
   
@@ -41,43 +45,79 @@ const DataBrowser: React.FC<DataBrowserProps> = ({
     <div className="h-full flex flex-col bg-white overflow-hidden">
       {/* Header */}
       <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border-b border-slate-200 p-6">
-        <h1 className="text-2xl font-bold text-slate-900 mb-4">
-          <i className="fas fa-database text-indigo-600 mr-3"></i>Trình duyệt dữ liệu
-        </h1>
-        <p className="text-slate-600 mb-4">Khám phá cơ sở dữ liệu trong bộ nhớ JSON với phân trang hỗ trợ</p>
-
-        {/* Table Selector */}
-        <div className="flex gap-2 flex-wrap">
-          {Object.keys(tables).map((tableName) => {
-            const rowCount = tables[tableName].rows.length;
-            const colCount = tables[tableName].columns.length;
-            return (
-              <button
-                key={tableName}
-                onClick={() => {
-                  onTableSelect(tableName);
-                  onPageChange(1);
-                }}
-                className={`px-4 py-3 rounded-lg font-semibold transition-all shadow-sm ${
-                  selectedTable === tableName
-                    ? 'bg-indigo-600 text-white shadow-lg scale-105'
-                    : 'bg-white border-2 border-slate-200 text-slate-700 hover:border-indigo-400'
-                }`}
-              >
-                <i className={`fas ${selectedTable === tableName ? 'fa-table' : 'fa-folder'} mr-2`}></i>
-                {tableName}
-                <span className="ml-2 text-xs opacity-75">
-                  ({rowCount} {rowCount === 1 ? 'dòng' : 'dòng'} × {colCount} cột)
-                </span>
-              </button>
-            );
-          })}
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900 mb-1">
+              <i className="fas fa-database text-indigo-600 mr-3"></i>Trình duyệt dữ liệu
+            </h1>
+            <p className="text-slate-600">Khám phá cơ sở dữ liệu trong bộ nhớ JSON với phân trang hỗ trợ</p>
+          </div>
+          
+          {/* View Mode Toggle */}
+          <div className="flex items-center gap-2 bg-white rounded-lg border border-slate-200 p-1 shadow-sm">
+            <button
+              onClick={() => setViewMode('table')}
+              className={`px-4 py-2 rounded-md font-semibold transition-all flex items-center gap-2 ${
+                viewMode === 'table'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'text-slate-600 hover:text-slate-800'
+              }`}
+              title="Xem bảng dữ liệu"
+            >
+              <i className="fas fa-table text-lg"></i>
+              <span className="text-sm">Bảng</span>
+            </button>
+            <button
+              onClick={() => setViewMode('erd')}
+              className={`px-4 py-2 rounded-md font-semibold transition-all flex items-center gap-2 ${
+                viewMode === 'erd'
+                  ? 'bg-purple-600 text-white shadow-md'
+                  : 'text-slate-600 hover:text-slate-800'
+              }`}
+              title="Xem sơ đồ ERD"
+            >
+              <i className="fas fa-diagram-project text-lg"></i>
+              <span className="text-sm">ERD</span>
+            </button>
+          </div>
         </div>
+
+        {/* Table Selector - Only show when in table view */}
+        {viewMode === 'table' && (
+          <div className="flex gap-2 flex-wrap">
+            {Object.keys(tables).map((tableName) => {
+              const rowCount = tables[tableName].rows.length;
+              const colCount = tables[tableName].columns.length;
+              return (
+                <button
+                  key={tableName}
+                  onClick={() => {
+                    onTableSelect(tableName);
+                    onPageChange(1);
+                  }}
+                  className={`px-4 py-3 rounded-lg font-semibold transition-all shadow-sm ${
+                    selectedTable === tableName
+                      ? 'bg-indigo-600 text-white shadow-lg scale-105'
+                      : 'bg-white border-2 border-slate-200 text-slate-700 hover:border-indigo-400'
+                  }`}
+                >
+                  <i className={`fas ${selectedTable === tableName ? 'fa-table' : 'fa-folder'} mr-2`}></i>
+                  {tableName}
+                  <span className="ml-2 text-xs opacity-75">
+                    ({rowCount} {rowCount === 1 ? 'dòng' : 'dòng'} × {colCount} cột)
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-auto p-6">
-        {table ? (
+        {viewMode === 'erd' ? (
+          <ERDDiagram tables={tables} />
+        ) : table ? (
           <div className="space-y-4">
             {/* Table Info */}
             <div className="grid grid-cols-3 gap-4 mb-6">
