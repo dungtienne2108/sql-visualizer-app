@@ -12,6 +12,7 @@ import Pagination from './components/Pagination';
 import Navbar from './components/Navbar';
 import TextareaWithHighlight from './components/TextareaWithHighlight';
 import ExampleSelector from './components/ExampleSelector';
+import WelcomeModal from './components/WelcomeModal';
 import { findClauseRange } from './utils/sqlHighlighter';
 
 const App: React.FC = () => {
@@ -27,6 +28,7 @@ const App: React.FC = () => {
   const [selectedTable, setSelectedTable] = useState<string>('users');
   const [currentTablePage, setCurrentTablePage] = useState<number>(1);
   const [tableResultPage, setTableResultPage] = useState<number>(1);
+  const [showWelcomeModal, setShowWelcomeModal] = useState<boolean>(true);
   const ROWS_PER_PAGE = 10;
 
   const handleRunQuery = useCallback(() => {
@@ -95,6 +97,11 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <WelcomeModal 
+        isOpen={showWelcomeModal}
+        onClose={() => setShowWelcomeModal(false)}
+      />
+      
       <Navbar 
         currentPage={currentPage}
         onPageChange={(page) => {
