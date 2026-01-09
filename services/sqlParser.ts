@@ -1,5 +1,100 @@
 
-import { QueryComponents, Join } from '../types';
+import { QueryComponents, Join, SelectColumn } from '../types';
+
+/**
+ * Parse SELECT column with potential alias
+ * Examples: "name", "COUNT(*) as user_count", "AVG(age)", "DISTINCT(country) AS countries"
+ */
+const parseSelectColumn = (col: string): SelectColumn => {
+  const trimmed = col.trim();
+  
+  // Check for AS alias
+  const asMatch = trimmed.match(/^(.*?)\s+AS\s+(\w+)$/i);
+  const expression = asMatch ? asMatch[1].trim() : trimmed;
+  const alias = asMatch ? asMatch[2] : undefined;
+
+  // Check for aggregate functions
+  const countMatch = expression.match(/COUNT\s*\(\s*(\*|DISTINCT\s+(\w+)|(\w+))\s*\)/i);
+  const sumMatch = expression.match(/SUM\s*\(\s*(\w+)\s*\)/i);
+  const avgMatch = expression.match(/AVG\s*\(\s*(\w+)\s*\)/i);
+  const minMatch = expression.match(/MIN\s*\(\s*(\w+)\s*\)/i);
+  const maxMatch = expression.match(/MAX\s*\(\s*(\w+)\s*\)/i);
+  const distinctMatch = expression.match(/DISTINCT\s*\(\s*(\w+)\s*\)/i);
+
+  if (countMatch) {
+    const isDistinct = countMatch[1].toUpperCase().includes('DISTINCT');
+    return {
+      expression,
+      alias,
+      displayName: alias || expression,
+      isAggregate: true,
+      aggregateType: isDistinct ? 'DISTINCT_COUNT' : 'COUNT',
+      aggregateField: isDistinct ? countMatch[2] : '*'
+    };
+  }
+
+  if (sumMatch) {
+    return {
+      expression,
+      alias,
+      displayName: alias || expression,
+      isAggregate: true,
+      aggregateType: 'SUM',
+      aggregateField: sumMatch[1]
+    };
+  }
+
+  if (avgMatch) {
+    return {
+      expression,
+      alias,
+      displayName: alias || expression,
+      isAggregate: true,
+      aggregateType: 'AVG',
+      aggregateField: avgMatch[1]
+    };
+  }
+
+  if (minMatch) {
+    return {
+      expression,
+      alias,
+      displayName: alias || expression,
+      isAggregate: true,
+      aggregateType: 'MIN',
+      aggregateField: minMatch[1]
+    };
+  }
+
+  if (maxMatch) {
+    return {
+      expression,
+      alias,
+      displayName: alias || expression,
+      isAggregate: true,
+      aggregateType: 'MAX',
+      aggregateField: maxMatch[1]
+    };
+  }
+
+  if (distinctMatch) {
+    return {
+      expression,
+      alias,
+      displayName: alias || expression,
+      isAggregate: true,
+      aggregateType: 'DISTINCT_COUNT',
+      aggregateField: distinctMatch[1]
+    };
+  }
+
+  return {
+    expression,
+    alias,
+    displayName: alias || expression,
+    isAggregate: false
+  };
+};
 
 /**
  * A simplified SQL parser for educational MVP.
@@ -22,10 +117,10 @@ export const parseSQL = (sql: string): QueryComponents => {
   const limitMatch = normalized.match(/LIMIT\s+(\d+)/i);
 
   if (!selectMatch || !fromMatch) {
-    throw new Error("Invalid SQL: Must contain SELECT and FROM clauses.");
+    throw new Error("Câu lệnh SQL không hợp lệ. Vui lòng kiểm tra lại.");
   }
 
-  const selectColumns = selectMatch[1].split(',').map(s => s.trim());
+  const selectColumns = selectMatch[1].split(',').map(s => parseSelectColumn(s.trim()));
   const fromTable = fromMatch[1].toLowerCase();
 
   const components: QueryComponents = {

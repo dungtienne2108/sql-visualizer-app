@@ -174,5 +174,39 @@ export const EXAMPLES = [
     query: "SELECT users.name, COUNT(orders.order_id) as order_count FROM users LEFT JOIN orders ON users.id = orders.user_id GROUP BY users.name ORDER BY order_count DESC",
     description: "LEFT JOIN + GROUP BY: Đếm đơn hàng của mỗi người dùng",
     category: "Kết nối bảng"
+  },
+  
+  // Alias (AS)
+  {
+    query: "SELECT name AS user_name, age AS user_age, country AS location FROM users WHERE age > 25",
+    description: "Sử dụng Alias (AS) để đổi tên cột trong kết quả",
+    category: "Alias"
+  },
+  {
+    query: "SELECT id AS customer_id, name AS customer_name FROM users LIMIT 5",
+    description: "Alias cho cột ID và Name",
+    category: "Alias"
+  },
+
+  // Aggregate Functions
+  {
+    query: "SELECT AVG(age) as average_age FROM users",
+    description: "Tính tuổi trung bình của tất cả người dùng",
+    category: "Hàm Tổng Hợp"
+  },
+  {
+    query: "SELECT MIN(amount) as min_order, MAX(amount) as max_order FROM orders",
+    description: "Tìm đơn hàng nhỏ nhất và lớn nhất",
+    category: "Hàm Tổng Hợp"
+  },
+  {
+    query: "SELECT category, AVG(amount) as avg_sales, MIN(amount) as min_sales, MAX(amount) as max_sales FROM sales GROUP BY category ORDER BY avg_sales DESC",
+    description: "Tính thống kê doanh số (avg, min, max) theo danh mục",
+    category: "Hàm Tổng Hợp"
+  },
+  {
+    query: "SELECT COUNT(DISTINCT country) as num_countries FROM users",
+    description: "Đếm số quốc gia khác nhau",
+    category: "Hàm Tổng Hợp"
   }
 ];

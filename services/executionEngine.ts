@@ -255,8 +255,12 @@ export const generateExecutionSteps = (
   }
 
   // 3. GROUP BY & AGGREGATIONS
+  // Check if we have aggregate functions in SELECT
+  const hasAggregates = query.select.some(col => col.isAggregate);
+  
   // For MVP, we handle simple GROUP BY and COUNT/SUM if mentioned in SELECT
-  if (query.groupBy) {
+  if (query.groupBy || hasAggregates) {
+    if (query.groupBy) {
     const groups: Record<string, TableRow[]> = {};
     currentRows.forEach(row => {
       const groupKey = query.groupBy!.map(col => row[col]).join('|');
@@ -289,15 +293,46 @@ export const generateExecutionSteps = (
         newRow[col] = firstRow[col];
       });
 
-      // Simple detection of aggregates in SELECT
-      query.select.forEach(col => {
-        const lower = col.toLowerCase();
-        if (lower.includes('count(*)')) {
-          newRow[col] = groupRows.length;
-        } else if (lower.includes('sum(')) {
-          const field = col.match(/\((.*?)\)/)?.[1];
-          if (field) {
-            newRow[col] = groupRows.reduce((acc, r) => acc + (Number(r[field]) || 0), 0);
+      // Calculate aggregates based on SelectColumn info
+      query.select.forEach(selectCol => {
+        const displayName = selectCol.displayName;
+        
+        if (!selectCol.isAggregate) {
+          // For non-aggregates, use first row value
+          newRow[displayName] = firstRow[selectCol.expression];
+        } else {
+          // Calculate aggregate based on type
+          switch (selectCol.aggregateType) {
+            case 'COUNT':
+              newRow[displayName] = groupRows.length;
+              break;
+            case 'DISTINCT_COUNT': {
+              const values = new Set(groupRows.map(r => r[selectCol.aggregateField!]));
+              newRow[displayName] = values.size;
+              break;
+            }
+            case 'SUM':
+              newRow[displayName] = groupRows.reduce((acc, r) => {
+                return acc + (Number(r[selectCol.aggregateField!]) || 0);
+              }, 0);
+              break;
+            case 'AVG': {
+              const sum = groupRows.reduce((acc, r) => {
+                return acc + (Number(r[selectCol.aggregateField!]) || 0);
+              }, 0);
+              newRow[displayName] = groupRows.length > 0 ? sum / groupRows.length : 0;
+              break;
+            }
+            case 'MIN':
+              newRow[displayName] = Math.min(
+                ...groupRows.map(r => Number(r[selectCol.aggregateField!]) || 0)
+              );
+              break;
+            case 'MAX':
+              newRow[displayName] = Math.max(
+                ...groupRows.map(r => Number(r[selectCol.aggregateField!]) || 0)
+              );
+              break;
           }
         }
       });
@@ -305,8 +340,71 @@ export const generateExecutionSteps = (
       return newRow;
     });
 
-    currentRows = aggregatedRows;
-    currentColumns = Object.keys(aggregatedRows[0]).filter(k => !k.startsWith('_'));
+      currentRows = aggregatedRows;
+      currentColumns = Object.keys(aggregatedRows[0]).filter(k => !k.startsWith('_'));
+    } else if (hasAggregates && !query.groupBy) {
+      // Aggregate without GROUP BY: apply to all rows as one group
+      const aggregatedRow: TableRow = { _id: 'agg0' };
+      
+      query.select.forEach(selectCol => {
+        const displayName = selectCol.displayName;
+        
+        if (!selectCol.isAggregate) {
+          // For non-aggregates without GROUP BY, take first row value
+          aggregatedRow[displayName] = currentRows[0]?.[selectCol.expression];
+        } else {
+          // Calculate aggregate on all rows
+          switch (selectCol.aggregateType) {
+            case 'COUNT':
+              aggregatedRow[displayName] = currentRows.length;
+              break;
+            case 'DISTINCT_COUNT': {
+              const values = new Set(currentRows.map(r => r[selectCol.aggregateField!]));
+              aggregatedRow[displayName] = values.size;
+              break;
+            }
+            case 'SUM':
+              aggregatedRow[displayName] = currentRows.reduce((acc, r) => {
+                return acc + (Number(r[selectCol.aggregateField!]) || 0);
+              }, 0);
+              break;
+            case 'AVG': {
+              const sum = currentRows.reduce((acc, r) => {
+                return acc + (Number(r[selectCol.aggregateField!]) || 0);
+              }, 0);
+              aggregatedRow[displayName] = currentRows.length > 0 ? sum / currentRows.length : 0;
+              break;
+            }
+            case 'MIN':
+              aggregatedRow[displayName] = Math.min(
+                ...currentRows.map(r => Number(r[selectCol.aggregateField!]) || 0)
+              );
+              break;
+            case 'MAX':
+              aggregatedRow[displayName] = Math.max(
+                ...currentRows.map(r => Number(r[selectCol.aggregateField!]) || 0)
+              );
+              break;
+          }
+        }
+      });
+
+      steps.push({
+        step: SQLLogicalStep.GROUP_BY,
+        title: 'AGGREGATE',
+        description: `Tính toán các hàm tổng hợp trên tất cả ${currentRows.length} dòng.`,
+        rows: JSON.parse(JSON.stringify([aggregatedRow])),
+        columns: query.select.map(c => c.displayName),
+        metadata: {
+          rowCount: 1,
+          groupCount: 1,
+          highlightedClause: `Aggregates: ${query.select.filter(c => c.isAggregate).map(c => c.expression).join(', ')}`
+        }
+      });
+
+      currentRows = [aggregatedRow];
+      currentColumns = query.select.map(c => c.displayName);
+    }
   }
 
   // 4. HAVING
@@ -336,15 +434,15 @@ export const generateExecutionSteps = (
 
   // 5. SELECT STEP
   // Filter columns and compute final projections
-  const finalColumns = query.select.includes('*') 
-    ? sourceTable.columns 
-    : query.select;
+  const finalColumns = query.select[0].displayName === '*'
+    ? sourceTable.columns
+    : query.select.map(col => col.displayName);
 
   const projectedRows = currentRows.map(row => {
     const newRow: TableRow = { _id: row._id };
-    finalColumns.forEach(col => {
-      // If aggregate was already computed in Group By, use it. Otherwise direct mapping.
-      newRow[col] = row[col] !== undefined ? row[col] : row[col];
+    query.select.forEach(selectCol => {
+      const displayName = selectCol.displayName;
+      newRow[displayName] = row[displayName] !== undefined ? row[displayName] : row[selectCol.expression];
     });
     return newRow;
   });
@@ -357,7 +455,7 @@ export const generateExecutionSteps = (
     columns: finalColumns,
     metadata: {
       rowCount: projectedRows.length,
-      highlightedClause: `SELECT ${query.select.join(', ')}`
+      highlightedClause: `SELECT ${query.select.map(c => c.displayName).join(', ')}`
     }
   });
 
@@ -368,8 +466,29 @@ export const generateExecutionSteps = (
   if (query.orderBy) {
     const sortedRows = [...currentRows].sort((a, b) => {
       for (const sort of query.orderBy!) {
-        const valA = a[sort.column];
-        const valB = b[sort.column];
+        // Try to find the column by alias first, then by original name
+        let columnToSort = sort.column;
+        
+        // Check if sort.column matches any alias
+        const selectColWithAlias = query.select.find(
+          col => col.alias && col.alias.toLowerCase() === sort.column.toLowerCase()
+        );
+        if (selectColWithAlias) {
+          columnToSort = selectColWithAlias.displayName;
+        }
+        
+        // Also try displayName directly
+        if (!selectColWithAlias && !a.hasOwnProperty(columnToSort)) {
+          const selectColWithDisplay = query.select.find(
+            col => col.displayName.toLowerCase() === sort.column.toLowerCase()
+          );
+          if (selectColWithDisplay) {
+            columnToSort = selectColWithDisplay.displayName;
+          }
+        }
+        
+        const valA = a[columnToSort];
+        const valB = b[columnToSort];
         if (valA === valB) continue;
         const multiplier = sort.direction === 'ASC' ? 1 : -1;
         if (typeof valA === 'number' && typeof valB === 'number') {

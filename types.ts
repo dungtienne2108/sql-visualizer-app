@@ -61,8 +61,17 @@ export interface Join {
   condition: JoinCondition;
 }
 
+export interface SelectColumn {
+  expression: string; // Original column name or aggregate function
+  alias?: string; // Alias if provided with AS
+  displayName: string; // What to show in the result (alias or original)
+  isAggregate?: boolean; // True if contains COUNT/SUM/AVG/MIN/MAX
+  aggregateType?: 'COUNT' | 'SUM' | 'AVG' | 'MIN' | 'MAX' | 'DISTINCT_COUNT'; // Type of aggregate
+  aggregateField?: string; // Field being aggregated
+}
+
 export interface QueryComponents {
-  select: string[];
+  select: SelectColumn[];
   from: string;
   joins?: Join[];
   where?: string;
